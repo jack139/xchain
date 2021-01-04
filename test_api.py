@@ -30,7 +30,6 @@ if __name__ == '__main__':
             'user_id'    : "qyBsXnVKKjvFNxHBRudc3tCp8t8ymqBSF1Ga8qlfqFs=",
             'data'     : 'zzzzz',
             'block_id' : '59534f7d-db5b-4792-8937-09996638c3d4',
-            'action' : 1,
             'deal_id' : '59534f7d-db5b-4792-8937-09996638c3d4',
             'from_user_id' : 'j9cIgmm17x0aLApf0i20UR7Pj34Ua/JwyWOuBGgYIFg=',
             'auth_id' : 'ef57fd9e-66c8-4d23-b142-8bc32b57bfcd',
