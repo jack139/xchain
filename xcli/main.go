@@ -53,7 +53,7 @@ var (
 			if len(args) == 0 {
 				return errors.New("need more parameters")
 			}
-			data := args[2]
+			data := args[0]
 			return me.Deal(data)
 		},
 	}
