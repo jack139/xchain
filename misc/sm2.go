@@ -58,9 +58,7 @@ var (
 
 	// 用户密钥
 	daPriStr = string("9nJzj0RrtDhYd3LzfbiIOL3LHryYYhJaxGozP001540=")
-	daPubStr = string("gOh55IGeQ1dey1KTw5Gv01sb7n7uuZrmuBGg9oz34cM4wqsdAYTaJFg8Gl/toflrVe6mJswJtnvkIQcNe3GFXg==")
 	dbPriStr = string("39WSsgO/Kp9QUiQj7STJ5z/X6Vg4L78blSi4sjQIkVQ=")
-	dbPubStr = string("LQkeG2TpMARDnMu5HkSESTBq6oJMbGCEt0qenxvgwZXZzPl/zU5xycq+kcp5ZkXGIrO14lvVINMUakRYBUe/3w==")
 
 	// 临时密钥
 	ra, rb *sm2.PrivateKey
@@ -83,11 +81,7 @@ func restoreKey(privStr string) *sm2.PrivateKey {
 func restorePublicKey(pubStr string) *sm2.PublicKey {
 	public, _  := base64.StdEncoding.DecodeString(pubStr)
 
-	curve := sm2.P256Sm2()
-	key := new(sm2.PublicKey)
-	key.Curve = curve
-	key.X = new(big.Int).SetBytes(public[:32])
-	key.Y = new(big.Int).SetBytes(public[32:])
+	key := sm2.Decompress(public)
 	return key
 }
 
@@ -102,10 +96,8 @@ func step_1_B() (string, string, error){
 	// 生成 rB
 	rb, _ = sm2.GenerateKey(rand.Reader) // 生成密钥对
 
-	dbPubBytes := append(db.PublicKey.X.Bytes(), db.PublicKey.Y.Bytes()...)
-	rbPubBytes := append(rb.PublicKey.X.Bytes(), rb.PublicKey.Y.Bytes()...)
-	return base64.StdEncoding.EncodeToString(dbPubBytes),
-		base64.StdEncoding.EncodeToString(rbPubBytes),
+	return base64.StdEncoding.EncodeToString(sm2.Compress(&db.PublicKey)),
+		base64.StdEncoding.EncodeToString(sm2.Compress(&rb.PublicKey)),
 		nil
 }
 
@@ -143,10 +135,8 @@ func step_2_A(dbPubStr string, rbPubStr string) (string, string, []byte, error){
 	}
 	fmt.Printf("encrypted --> %x\n", encrypted)
 
-	daPubBytes := append(da.PublicKey.X.Bytes(), da.PublicKey.Y.Bytes()...)
-	raPubBytes := append(ra.PublicKey.X.Bytes(), ra.PublicKey.Y.Bytes()...)
-	return base64.StdEncoding.EncodeToString(daPubBytes),
-		base64.StdEncoding.EncodeToString(raPubBytes),
+	return base64.StdEncoding.EncodeToString(sm2.Compress(&da.PublicKey)),
+		base64.StdEncoding.EncodeToString(sm2.Compress(&ra.PublicKey)),
 		encrypted, nil
 }
 
