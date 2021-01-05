@@ -178,7 +178,7 @@ func main() {
 
 	/*
 	priv, _ := sm2.GenerateKey(rand.Reader) // 生成密钥对
-	pubBytes := append(priv.PublicKey.X.Bytes(), priv.PublicKey.Y.Bytes()...)
+	pubBytes := sm2.Compress(&ra.PublicKey)
 	fmt.Printf("private: %s\npublic: %s\n",
 		base64.StdEncoding.EncodeToString(priv.D.Bytes()),
 		base64.StdEncoding.EncodeToString(pubBytes),

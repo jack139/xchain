@@ -2,7 +2,8 @@ package types
 
 import (
 	"time"
-	"github.com/tendermint/tendermint/crypto"
+	"crypto/rand"
+	"github.com/tjfoc/gmsm/sm2"
 )
 
 // IPayload 接口
@@ -15,7 +16,7 @@ type IPayload interface {
 type Transx struct {
 	Signature  []byte //发送方对这个消息的私钥签名
 	SendTime   *time.Time
-	SignPubKey crypto.PubKey
+	SignPubKey sm2.PublicKey
 	Payload    IPayload
 }
 
@@ -23,9 +24,9 @@ type Transx struct {
 	Sign 给消息签名
 	privKey:发送方私钥
 */
-func (cmu *Transx) Sign(privKey crypto.PrivKey) error {
+func (cmu *Transx) Sign(privKey sm2.PrivateKey) error {
 	bz := cmu.Payload.getSignBytes()
-	sig, err := privKey.Sign(bz)
+	sig, err := privKey.Sign(rand.Reader, bz, nil) 
 	cmu.Signature = sig
 	return err
 }
@@ -39,7 +40,7 @@ func (cmu *Transx) Verify() bool {
 	}
 	data := cmu.Payload.getSignBytes()
 	sig := cmu.Signature
-	rslt := cmu.SignPubKey.VerifySignature(data, sig)
+	rslt := cmu.SignPubKey.Verify(sig, data)
 	return rslt
 }
 

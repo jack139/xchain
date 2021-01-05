@@ -3,18 +3,21 @@ package client
 import (
 	"xchain/types"
 
+	"bytes"
+	"math/big"
 	"fmt"
 	"io/ioutil"
 	"context"
-	crypto_rand "crypto/rand"
+	"crypto/rand"
 	"encoding/base64"
 
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/os"
 	rpcclient "github.com/tendermint/tendermint/rpc/client/http"
-	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	"golang.org/x/crypto/nacl/box"
+	//"github.com/tendermint/tendermint/crypto"
+	//"github.com/tendermint/tendermint/crypto/ed25519"
+	//"golang.org/x/crypto/nacl/box"
+	"github.com/tjfoc/gmsm/sm2"
 )
 
 // KEYFILENAME 私钥文件名
@@ -32,12 +35,12 @@ func init() {
 }
 
 type cryptoPair struct {
-	PrivKey *[32]byte
-	PubKey  *[32]byte
+	PrivKey *[]byte
+	PubKey  *[]byte
 }
 
 type User struct {
-	SignKey    crypto.PrivKey `json:"sign_key"` // 节点私钥，用户签名
+	SignKey    sm2.PrivateKey `json:"sign_key"` // 节点私钥，用户签名
 	CryptoPair cryptoPair     // 密钥协商使用
 }
 
@@ -70,13 +73,19 @@ func GenUserKey(path string) (*User, error) {
 	// 生成新的密钥文件
 	fmt.Println("Make new key file: " + keyFilePath)	
 	uk := new(User)
-	uk.SignKey = ed25519.GenPrivKey()
-	pubKey, priKey, err := box.GenerateKey(crypto_rand.Reader)
+	signKey, err := sm2.GenerateKey(rand.Reader) // 生成密钥对
 	if err != nil {
 		return nil, err
 	}
-	uk.CryptoPair = cryptoPair{PrivKey: priKey, PubKey: pubKey}
-	jsonBytes, err := cdc.MarshalJSON(uk)
+	uk.SignKey = *signKey
+	pubKey := sm2.Compress(&uk.SignKey.PublicKey)
+	priKey := uk.SignKey.D.Bytes()
+
+	//var pubKey32, priKey32 [32]byte
+	//copy(pubKey32[:], pubKey[:32])
+	//copy(priKey32[:], priKey[:32])
+	uk.CryptoPair = cryptoPair{PrivKey: &priKey, PubKey: &pubKey}
+	jsonBytes, err := cdc.MarshalJSON(uk.CryptoPair)
 	if err != nil {
 		return nil, err
 	}
@@ -87,17 +96,31 @@ func GenUserKey(path string) (*User, error) {
 	return uk, nil
 }
 
+// 从 base64私钥 恢复密钥对
+func restoreKey(priv *[]byte) *sm2.PrivateKey {
+	//priv, _  := base64.StdEncoding.DecodeString(privStr)
+
+	curve := sm2.P256Sm2()
+	key := new(sm2.PrivateKey)
+	key.PublicKey.Curve = curve
+	key.D = new(big.Int).SetBytes(*priv)
+	key.PublicKey.X, key.PublicKey.Y = curve.ScalarBaseMult(*priv)
+	return key
+}
+
 func loadUserKey(keyFilePath string) (*User, error) {
-	//copy(privKey[:], bz)
 	jsonBytes, err := ioutil.ReadFile(keyFilePath)
 	if err != nil {
 		return nil, err
 	}
 	uk := new(User)
-	err = cdc.UnmarshalJSON(jsonBytes, uk)
+	err = cdc.UnmarshalJSON(jsonBytes, &uk.CryptoPair)
 	if err != nil {
 		return nil, fmt.Errorf("Error reading UserKey from %v: %v", keyFilePath, err)
 	}
+	// 恢复 privateKey
+	uk.SignKey = *restoreKey(uk.CryptoPair.PrivKey)
+
 	return uk, nil
 }
 
@@ -112,22 +135,22 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 		var data string
 
 		if auth.Action==0x05 { // 授权响应，则尝试解密 data
-			var decryptKey, publicKey [32]byte
+			//var decryptKey, publicKey []byte
 
-			publicKey = auth.FromUserID
+			//publicKey = auth.FromUserID
 
 			// 解密 data 数据
-			box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-			var decryptNonce [24]byte
-			copy(decryptNonce[:], auth.Data[:24])
+			//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
+			//var decryptNonce [24]byte
+			//copy(decryptNonce[:], auth.Data[:24])
 			//fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-			decrypted, ok := box.OpenAfterPrecomputation(nil, auth.Data[24:], &decryptNonce, &decryptKey)
-			if ok {
-				data = string(decrypted)
-			} else {
-				data = base64.StdEncoding.EncodeToString(auth.Data) // 加密数据的 base64
-				fmt.Println("decryption error")
-			}
+			//decrypted, ok := box.OpenAfterPrecomputation(nil, auth.Data[24:], &decryptNonce, &decryptKey)
+			//if ok {
+			//	data = string(decrypted)
+			//} else {
+			//	data = base64.StdEncoding.EncodeToString(auth.Data) // 加密数据的 base64
+			//	fmt.Println("decryption error")
+			//}
 		}
 
 		userId, _ := cdc.MarshalJSON(auth.FromUserID)
@@ -150,23 +173,23 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 			var data string
 			
 			// 尝试解密 data
-			var decryptKey, publicKey [32]byte
+			//var decryptKey, publicKey []byte
 
-			if deal.UserID==*me.CryptoPair.PubKey { // 是自己的交易, 进行解密
-				publicKey = deal.UserID
+			if bytes.Compare(deal.UserID, *me.CryptoPair.PubKey)==0 { // 是自己的交易, 进行解密
+				//publicKey = deal.UserID
 
 				// 解密 data 数据
-				box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-				var decryptNonce [24]byte
-				copy(decryptNonce[:], deal.Data[:24])
-				//fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-				decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
-				if ok {
-					data = string(decrypted)
-				} else {
-					data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
-					fmt.Println("decryption error")
-				}
+				//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
+				//var decryptNonce [24]byte
+				//copy(decryptNonce[:], deal.Data[:24])
+				////fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
+				//decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
+				//if ok {
+				//	data = string(decrypted)
+				//} else {
+				//	data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
+				//	fmt.Println("decryption error")
+				//}
 			} else {
 				data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
 			}

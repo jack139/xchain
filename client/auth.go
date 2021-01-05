@@ -4,12 +4,12 @@ import (
 	"xchain/types"
 
 	"fmt"
-	"io"
+	//"io"
 	"time"
-	crypto_rand "crypto/rand"
+	//crypto_rand "crypto/rand"
 
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/crypto/nacl/box"
+	//"golang.org/x/crypto/nacl/box"
 )
 
 
@@ -19,7 +19,7 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 	now := time.Now()
 
 	// 检查 toUserId 合理性
-	var fromUserIdBytes [32]byte
+	var fromUserIdBytes []byte
 	err := cdc.UnmarshalJSON([]byte("\""+fromUserId+"\""), &fromUserIdBytes) // 反序列化时需要双引号，因为是字符串
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 	tx.Payload = auth
 
 	tx.Sign(me.SignKey)
-	tx.SignPubKey = me.SignKey.PubKey()
+	tx.SignPubKey = me.SignKey.PublicKey
 
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
@@ -109,38 +109,39 @@ func (me *User) AuthResponse(authId string) error {
 		return fmt.Errorf("DealID not found")
 	}
 
-	deal, ok := (*dealTx).Payload.(*types.Deal)	// 交易块
+	//deal, ok := (*dealTx).Payload.(*types.Deal)	// 交易块
+	_, ok = (*dealTx).Payload.(*types.Deal)	// 交易块
 	if !ok {
 		return fmt.Errorf("need a Deal Payload")
 	}
 
 	// 解密
-	var decryptKey, publicKey [32]byte
+	//var decryptKey, publicKey []byte
 
-	publicKey = auth.FromUserID
+	//publicKey = auth.FromUserID
 
 	// 解密 data 数据
-	box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-	var decryptNonce [24]byte
-	copy(decryptNonce[:], deal.Data[:24])
-	//fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-	decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
-	if !ok {
-		return fmt.Errorf("decryption error")
-	}
+	//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
+	//var decryptNonce [24]byte
+	//copy(decryptNonce[:], deal.Data[:24])
+	////fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
+	//decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
+	//if !ok {
+	//	return fmt.Errorf("decryption error")
+	//}
 
 	// 重新加密，使用toUserID
-	publicKey = auth.ToUserID
+	//publicKey = auth.ToUserID
 
-	sharedEncryptKey := new([32]byte)
-	box.Precompute(sharedEncryptKey, &publicKey, me.CryptoPair.PrivKey)
+	//sharedEncryptKey := new([32]byte)
+	//box.Precompute(sharedEncryptKey, &publicKey, me.CryptoPair.PrivKey)
 
-	var nonce [24]byte
-	if _, err := io.ReadFull(crypto_rand.Reader, nonce[:]); err != nil {
-		panic(err)
-	}
+	//var nonce [24]byte
+	//if _, err := io.ReadFull(crypto_rand.Reader, nonce[:]); err != nil {
+	//	panic(err)
+	//}
 	//fmt.Printf("data=>%v,nonce=>%v,sharedEncryptKey=>%v\n", decrypted, nonce, *sharedEncryptKey)
-	encrypted := box.SealAfterPrecomputation(nonce[:], decrypted, &nonce, sharedEncryptKey)
+	//encrypted := box.SealAfterPrecomputation(nonce[:], decrypted, &nonce, sharedEncryptKey)
 
 	// 新建交易
 	tx := new(types.Transx)
@@ -151,13 +152,13 @@ func (me *User) AuthResponse(authId string) error {
 	authResp.DealID = auth.DealID
 	authResp.FromUserID = auth.FromUserID
 	authResp.ToUserID = auth.ToUserID
-	authResp.Data = encrypted
+	//authResp.Data = encrypted
 	authResp.Action = 0x05
 
 	tx.Payload = authResp
 
 	tx.Sign(me.SignKey)
-	tx.SignPubKey = me.SignKey.PubKey()
+	tx.SignPubKey = me.SignKey.PublicKey
 
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {

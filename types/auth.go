@@ -16,8 +16,8 @@ const (
 type Auth struct {
 	ID             uuid.UUID
 	DealID         uuid.UUID // 交易ID
-	FromUserID [32]byte // 用户的加密公钥
-	ToUserID   [32]byte // 被授权的用户的加密公钥
+	FromUserID     []byte // 用户的加密公钥
+	ToUserID       []byte // 被授权的用户的加密公钥
 	Data           []byte // FromUser加密数据，被授权者ToUserID可以解密
 	Action         byte // 0x04 请求授权， 0x05 响应授权
 }

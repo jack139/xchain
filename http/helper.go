@@ -37,7 +37,7 @@ func loadSecretKey(path string) error{
 			return err
 		}
 
-		secret := base64.StdEncoding.EncodeToString(u.SignKey.Bytes())
+		secret := base64.StdEncoding.EncodeToString(u.SignKey.D.Bytes())
 	    data := []byte(secret)
 	    appid:=fmt.Sprintf("%x", md5.Sum(data))
 		SECRET_KEY[appid] = u // 保存用户信息
@@ -127,7 +127,7 @@ func checkSign(content []byte) (*map[string]interface{}, *client.User, error) {
 		return nil, nil, fmt.Errorf("wrong appId")
 	}
 	// 获取 secret，用户密钥的签名串
-	secret := base64.StdEncoding.EncodeToString(me.SignKey.Bytes())
+	secret := base64.StdEncoding.EncodeToString(me.SignKey.D.Bytes())
 
 	// 检查版本
 	if version!="1" {
