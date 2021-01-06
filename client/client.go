@@ -200,12 +200,15 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 		userId2, _ := cdc.MarshalJSON(auth.ToUserID)
 		respMap["type"] = "AUTH"
 		respMap["id"]  = auth.ID.String()
-		respMap["user_id"]  = string(userId[1 : len(userId)-1]) // 去掉两边引号
-		respMap["auth_user_id"]  = string(userId2[1 : len(userId2)-1])
+		respMap["from_user_id"]  = string(userId[1 : len(userId)-1]) // 去掉两边引号
+		respMap["to_user_id"]  = string(userId2[1 : len(userId2)-1])
 		respMap["data"]  = data
 		respMap["deal_id"]  = auth.DealID.String() // 返回dealID
 		respMap["action"]  = auth.Action
 		respMap["send_time"]  = *(*tx).SendTime
+		if auth.Action==5 {
+			respMap["req_id"]  = auth.ReqID.String() // 授权请求的ID
+		}
 		return &respMap
 
 	} else { // category == deal
