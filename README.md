@@ -11,6 +11,8 @@
 5. 交易数据使用链用户密钥加密，其他用户是否可见，需要获取数据所有者的授权
 6. 交易节点提供功能：数据提交，交易查询，查询授权请求，授权查询
 7. 交易区块的类型：交易数据；查询授权
+8. 密钥使用SM2算法，加密算法使用SM4
+9. 密钥交换过程依照《GMT00003.3-2012 SM2椭圆曲线公钥密码算法 第3部分：密钥交换协议》
 
 
 ### 交易链请求
@@ -20,10 +22,7 @@
 {
 	"Signature":"SXKaVqfAe5ypHpz1qM3tQTYa42F9JQoq4zwMYQLKN0E0s+nViVk2Z3b98mFXvTHnqRCFousPVCYdR7b+d21jCg==",
 	"SendTime":"2020-12-18T05:36:00.281914675Z",
-	"SignPubKey":{
-			"type":"ed25519/pubkey",
-			"value":"yaeWs6Y5a0djpvnShNwq+zZdeJmN9I+nrddWMMH+3Uo="
-	},
+	"SignPubKey":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
 	"Payload":{
 		// 详见下
 	}

@@ -16,14 +16,8 @@
 ​		链用户是具有提交区块链交易权限的用户。每个链用户通过一对密钥识别（例如下例中的PubKey），同时使用此密钥进行数据的加密解密操作，因此链用户的密钥需要妥善保管。密钥类似如下形式：
 ```json
 {
-	"sign_key":{
-		"type":"ed25519/privkey",
-		"value":"UgM13IPx/BkwfQo8jce6TMR5bRuAv7ZLdBooTZWm2ixLaNitCW91NHW06h8VQw=="
-	},
-	"CryptoPair":{
-		"PrivKey":"tgNfUoYkh9xKs1hVKs+5uXNetCxvDRRHBNmLMs5/NKk=",
-		"PubKey":"qyBsXnVKKjvFNxHBRudc3tCp8t8ymqBSF1Ga8qlfqFs="
-	}
+    "PrivKey":"UDD5X7pNUMgQs1XXxiqj91yteZkmcrQuiIux5RTUu90=",
+    "PubKey":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG"
 }
 ```
 
@@ -82,12 +76,12 @@
 
 > 签名/验签算法：
 >
-> 1. appid和app_secret均从链用户密钥文件中```sign_key.value```字段生成：appid为```sign_key.value```做MD5（字母小写），app_secret既是```sign_key.value```字段。
+> 1. appid和app_secret均从链用户密钥文件中```PrivKey```字段生成：appid为```PrivKey```做MD5（字母小写），app_secret既是```PrivKey```字段。
 > 2. 筛选，获取参数键值对，剔除sign_data参数。data参数按key升序排列进行json序列化。
 > 3. 排序，按key升序排序；data中json也按key升序排序。
 > 4. 拼接，按排序好的顺序拼接请求参数。
 >
-> ```key1=value1&key2=value2&...&key=appSecret```，key=app_secret固定拼接在参数串末尾。
+> ```key1=value1&key2=value2&...&key=app_secret```，key=app_secret固定拼接在参数串末尾。
 >
 > 4. 签名，使用制定的算法进行加签获取二进制字节，使用 16进制进行编码Hex.encode得到签名串，然后base64编码。
 > 5. 验签，对收到的参数按1-4步骤签名，比对得到的签名串与提交的签名串是否一致。
