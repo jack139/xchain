@@ -177,7 +177,7 @@ func query(addr []byte, category, queryContent string) (*[]types.Transx, error) 
 
 
 // 检查 授权请求的交易（dealID） 是否已进行响应
-func checkAuthResp(addr []byte, toUserId, dealId string) (bool, error) {
+func checkAuthResp(addr []byte, toUserId, reqId string) (bool, error) {
 	var buf bytes.Buffer
 	buf.WriteString("/")
 	buf.Write(addr)
@@ -186,7 +186,7 @@ func checkAuthResp(addr []byte, toUserId, dealId string) (bool, error) {
 	path := buf.String()
 
 	// req.Data 格式： ["用户公钥", "DealID"]
-	reqBytes, _ := cdc.MarshalJSON([2][]byte{[]byte(toUserId), []byte(dealId)})
+	reqBytes, _ := cdc.MarshalJSON([2][]byte{[]byte(toUserId), []byte(reqId)})
 
 	rsp, err := cli.ABCIQuery(ctx, path, reqBytes)
 	if err != nil {

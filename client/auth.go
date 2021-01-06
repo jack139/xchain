@@ -4,12 +4,12 @@ import (
 	"xchain/types"
 
 	"fmt"
-	//"io"
+	"bytes"
 	"time"
-	//crypto_rand "crypto/rand"
-
+	"crypto/rand"
 	uuid "github.com/satori/go.uuid"
-	//"golang.org/x/crypto/nacl/box"
+	"github.com/tjfoc/gmsm/sm2"
+	"github.com/tjfoc/gmsm/sm4"
 )
 
 
@@ -31,6 +31,25 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 		return err
 	}
 
+
+	// 生成 密钥交换的数据
+
+	// 生成 rB
+	rb, _ := sm2.GenerateKey(rand.Reader) // 生成密钥对
+	rbPubBytes := sm2.Compress(&rb.PublicKey) // 33 bytes
+
+	// 加密密钥使用私钥前16字节（128bit）
+	encryptKey := (*me.CryptoPair.PrivKey)[:16]
+	// 加密数据, rb私钥加密
+	encrypted, err := sm4.Sm4CFB(encryptKey, rb.D.Bytes(), true)
+	if err != nil {
+		return fmt.Errorf("sm4 encrypt error: %s", err)
+	}
+
+	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + 加密的rb.priv
+	cryptData := append([]byte{byte(len(rbPubBytes))}, rbPubBytes...)
+	cryptData = append(cryptData, encrypted...)
+
 	// 新建交易
 	tx := new(types.Transx)
 	tx.SendTime = &now
@@ -40,12 +59,12 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 	auth.DealID = uuidDealId
 	auth.FromUserID = fromUserIdBytes
 	auth.ToUserID = *me.CryptoPair.PubKey
+	auth.Data = cryptData
 	auth.Action = 0x04
 
 	tx.Payload = auth
 
 	tx.Sign(me.SignKey)
-	tx.SignPubKey = me.SignKey.PublicKey
 
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
@@ -90,9 +109,14 @@ func (me *User) AuthResponse(authId string) error {
 		return fmt.Errorf("need a Auth Payload")
 	}
 
+	// 检查fromUserId 是否是自己, 说明有问题！ 可能被黑！
+	if bytes.Compare(auth.FromUserID, *me.CryptoPair.PubKey)!=0 {
+		return fmt.Errorf("---> NOT MY AUTH <---")
+	}
+
 	// 检查是否已响应过，在toUserID的列表里找
 	toUserId, _ := cdc.MarshalJSON(auth.ToUserID)
-	isAuthorised, err := checkAuthResp(addr, string(toUserId), auth.DealID.String())
+	isAuthorised, err := checkAuthResp(addr, string(toUserId), authId)
 	if err != nil {
 		return err
 	}
@@ -109,39 +133,56 @@ func (me *User) AuthResponse(authId string) error {
 		return fmt.Errorf("DealID not found")
 	}
 
-	//deal, ok := (*dealTx).Payload.(*types.Deal)	// 交易块
-	_, ok = (*dealTx).Payload.(*types.Deal)	// 交易块
+	deal, ok := (*dealTx).Payload.(*types.Deal)	// 交易块
 	if !ok {
 		return fmt.Errorf("need a Deal Payload")
 	}
 
 	// 解密
-	//var decryptKey, publicKey []byte
 
-	//publicKey = auth.FromUserID
+	// 加密密钥使用私钥前16字节（128bit）
+	decryptKey := (*me.CryptoPair.PrivKey)[:16]
 
-	// 解密 data 数据
-	//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-	//var decryptNonce [24]byte
-	//copy(decryptNonce[:], deal.Data[:24])
-	////fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-	//decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
-	//if !ok {
-	//	return fmt.Errorf("decryption error")
-	//}
+	decrypted, err := sm4.Sm4CFB(decryptKey, deal.Data, false)
+	if err!=nil {
+		return fmt.Errorf("sm4 decrypt error: %s", err)
+	}
+	//fmt.Printf("plain --> %s\n", decrypted)
 
-	// 重新加密，使用toUserID
-	//publicKey = auth.ToUserID
 
-	//sharedEncryptKey := new([32]byte)
-	//box.Precompute(sharedEncryptKey, &publicKey, me.CryptoPair.PrivKey)
+	// 从 auth请求 里，获取密钥交换的数据
+	rbBytesLen := int(auth.Data[0])
+	dbBytes := auth.ToUserID
+	rbBytes := auth.Data[1:rbBytesLen+1]
 
-	//var nonce [24]byte
-	//if _, err := io.ReadFull(crypto_rand.Reader, nonce[:]); err != nil {
-	//	panic(err)
-	//}
-	//fmt.Printf("data=>%v,nonce=>%v,sharedEncryptKey=>%v\n", decrypted, nonce, *sharedEncryptKey)
-	//encrypted := box.SealAfterPrecomputation(nonce[:], decrypted, &nonce, sharedEncryptKey)
+	dbPub := restorePublicKey(dbBytes)
+	rbPub := restorePublicKey(rbBytes)
+
+	// da 就是自己的密钥
+	daPriv := me.SignKey
+	// 生成 ra
+	raPriv, _ := sm2.GenerateKey(rand.Reader) // 生成密钥对
+
+	//  生成 key
+	encryptKey, _, _, err := sm2.KeyExchangeA(16, 
+		auth.FromUserID, auth.ToUserID, &daPriv, dbPub, raPriv, rbPub)
+	if err != nil {
+		return err
+	}
+
+	// 重新加密
+	encrypted, err := sm4.Sm4CFB(encryptKey, decrypted, true)
+	if err != nil {
+		return fmt.Errorf("sm4 encrypt error: %s", err)
+	}
+	//fmt.Printf("%d %v\n", len(encrypted), encrypted)
+
+
+	raPubBytes := sm2.Compress(&raPriv.PublicKey) // 33 bytes
+
+	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + 加密的rb.priv
+	cryptData := append([]byte{byte(len(raPubBytes))}, raPubBytes...)
+	cryptData = append(cryptData, encrypted...)
 
 	// 新建交易
 	tx := new(types.Transx)
@@ -149,16 +190,16 @@ func (me *User) AuthResponse(authId string) error {
 
 	authResp := new(types.Auth)
 	authResp.ID = uuid.NewV4()
+	authResp.ReqID = auth.ID
 	authResp.DealID = auth.DealID
 	authResp.FromUserID = auth.FromUserID
 	authResp.ToUserID = auth.ToUserID
-	//authResp.Data = encrypted
+	authResp.Data = cryptData
 	authResp.Action = 0x05
 
 	tx.Payload = authResp
 
 	tx.Sign(me.SignKey)
-	tx.SignPubKey = me.SignKey.PublicKey
 
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {

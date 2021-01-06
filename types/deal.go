@@ -16,7 +16,6 @@ type Deal struct {
 	ID         uuid.UUID // 交易ID
 	UserID     []byte //用户的加密公钥
 	Data       []byte // 加密交易数据（例如 ipfs hash）
-	Refer      []byte // 参考字符串，用于索引
 }
 
 // GetKey 获取实体键

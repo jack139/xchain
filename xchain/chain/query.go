@@ -202,7 +202,7 @@ func (app *App) Query(req tmtypes.RequestQuery) (rsp tmtypes.ResponseQuery) {
 			auth, ok := tx.Payload.(*types.Auth)	// 授权块
 			if ok {
 				// DealID相同，说明已回复
-				if auth.Action==0x05 && auth.DealID.String()==string(qData[1]) {
+				if auth.Action==0x05 && auth.ReqID.String()==string(qData[1]) {
 					rsp.Value = []byte{1}
 					break
 				}

@@ -16,7 +16,7 @@ type IPayload interface {
 type Transx struct {
 	Signature  []byte //发送方对这个消息的私钥签名
 	SendTime   *time.Time
-	SignPubKey sm2.PublicKey
+	SignPubKey []byte // 公钥
 	Payload    IPayload
 }
 
@@ -28,6 +28,7 @@ func (cmu *Transx) Sign(privKey sm2.PrivateKey) error {
 	bz := cmu.Payload.getSignBytes()
 	sig, err := privKey.Sign(rand.Reader, bz, nil) 
 	cmu.Signature = sig
+	cmu.SignPubKey = sm2.Compress(&privKey.PublicKey)
 	return err
 }
 
@@ -40,7 +41,8 @@ func (cmu *Transx) Verify() bool {
 	}
 	data := cmu.Payload.getSignBytes()
 	sig := cmu.Signature
-	rslt := cmu.SignPubKey.Verify(sig, data)
+	key := sm2.Decompress(cmu.SignPubKey)
+	rslt := key.Verify(data, sig)
 	return rslt
 }
 

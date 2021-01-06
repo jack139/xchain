@@ -4,11 +4,9 @@ import (
 	"xchain/types"
 
 	"fmt"
-	//"io"
 	"time"
-	//crypto_rand "crypto/rand"
 	uuid "github.com/satori/go.uuid"
-	//"golang.org/x/crypto/nacl/box"
+	"github.com/tjfoc/gmsm/sm4"
 )
 
 func isASCII(s string) bool {
@@ -26,15 +24,15 @@ func (me *User) Deal(data string) error {
 	// 用户id
 	userId := *me.CryptoPair.PubKey
 
-	//sharedEncryptKey := new([32]byte)
-	//box.Precompute(sharedEncryptKey, &userId, me.CryptoPair.PrivKey)
+	// 加密密钥使用私钥前16字节（128bit）
+	encryptKey := (*me.CryptoPair.PrivKey)[:16]
 
-	//var nonce [24]byte
-	//if _, err := io.ReadFull(crypto_rand.Reader, nonce[:]); err != nil {
-	//	panic(err)
-	//}
-	////fmt.Printf("data=>%v,nonce=>%v,sharedEncryptKey=>%v\n", data, nonce, *sharedEncryptKey)
-	//encrypted := box.SealAfterPrecomputation(nonce[:], []byte(data), &nonce, sharedEncryptKey)
+	// 加密数据
+	encrypted, err := sm4.Sm4CFB(encryptKey, []byte(data), true)
+	if err != nil {
+		return fmt.Errorf("sm4 encrypt error: %s", err)
+	}
+	//fmt.Printf("encrypted --> %x\n", encrypted)
 
 	now := time.Now()
 	tx := new(types.Transx)
@@ -43,13 +41,13 @@ func (me *User) Deal(data string) error {
 	deal := types.Deal{
 		ID:         uuid.NewV4(),
 		UserID:     userId,
-		//Data:       encrypted,
+		Data:       encrypted,
 	}
 
 	tx.Payload = &deal
 
 	tx.Sign(me.SignKey)
-	tx.SignPubKey = me.SignKey.PublicKey
+
 	// broadcast this tx
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
@@ -65,7 +63,6 @@ func (me *User) Deal(data string) error {
 
 	fmt.Printf("deal => %+v\n", ret)
 
-	// ret  *ctypes.ResultBroadcastTxCommit
 	if ret.Code !=0 {
 		fmt.Println(ret.Log)
 		return fmt.Errorf(ret.Log)

@@ -68,6 +68,7 @@ var (
 // 从 base64私钥 恢复密钥对
 func restoreKey(privStr string) *sm2.PrivateKey {
 	priv, _  := base64.StdEncoding.DecodeString(privStr)
+	fmt.Printf("priv %d %v\n", len(priv), priv)
 
 	curve := sm2.P256Sm2()
 	key := new(sm2.PrivateKey)
@@ -80,6 +81,7 @@ func restoreKey(privStr string) *sm2.PrivateKey {
 // 从 base64 恢复公钥
 func restorePublicKey(pubStr string) *sm2.PublicKey {
 	public, _  := base64.StdEncoding.DecodeString(pubStr)
+	fmt.Printf("pub %d %v\n", len(public), public)
 
 	key := sm2.Decompress(public)
 	return key

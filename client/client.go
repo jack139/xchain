@@ -10,14 +10,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/os"
 	rpcclient "github.com/tendermint/tendermint/rpc/client/http"
-	//"github.com/tendermint/tendermint/crypto"
-	//"github.com/tendermint/tendermint/crypto/ed25519"
-	//"golang.org/x/crypto/nacl/box"
 	"github.com/tjfoc/gmsm/sm2"
+	"github.com/tjfoc/gmsm/sm4"
 )
 
 // KEYFILENAME 私钥文件名
@@ -78,12 +75,9 @@ func GenUserKey(path string) (*User, error) {
 		return nil, err
 	}
 	uk.SignKey = *signKey
-	pubKey := sm2.Compress(&uk.SignKey.PublicKey)
+	pubKey := sm2.Compress(&uk.SignKey.PublicKey) // 33 bytes
 	priKey := uk.SignKey.D.Bytes()
 
-	//var pubKey32, priKey32 [32]byte
-	//copy(pubKey32[:], pubKey[:32])
-	//copy(priKey32[:], priKey[:32])
 	uk.CryptoPair = cryptoPair{PrivKey: &priKey, PubKey: &pubKey}
 	jsonBytes, err := cdc.MarshalJSON(uk.CryptoPair)
 	if err != nil {
@@ -96,10 +90,8 @@ func GenUserKey(path string) (*User, error) {
 	return uk, nil
 }
 
-// 从 base64私钥 恢复密钥对
+// 从 byte 恢复密钥对
 func restoreKey(priv *[]byte) *sm2.PrivateKey {
-	//priv, _  := base64.StdEncoding.DecodeString(privStr)
-
 	curve := sm2.P256Sm2()
 	key := new(sm2.PrivateKey)
 	key.PublicKey.Curve = curve
@@ -108,6 +100,13 @@ func restoreKey(priv *[]byte) *sm2.PrivateKey {
 	return key
 }
 
+// 从 byte 恢复公钥
+func restorePublicKey(public []byte) *sm2.PublicKey {
+	key := sm2.Decompress(public)
+	return key
+}
+
+// 从文件导入用户密钥
 func loadUserKey(keyFilePath string) (*User, error) {
 	jsonBytes, err := ioutil.ReadFile(keyFilePath)
 	if err != nil {
@@ -135,22 +134,66 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 		var data string
 
 		if auth.Action==0x05 { // 授权响应，则尝试解密 data
-			//var decryptKey, publicKey []byte
+			// data 默认返回不解密的 base64
+			data = base64.StdEncoding.EncodeToString(auth.Data) // 加密数据的 base64
 
-			//publicKey = auth.FromUserID
+			for {
+				// 从请求的auth.Data里取到rb私钥
+				// 获取 authID 对应的 授权请求 块
+				addr, _ := cdc.MarshalJSON(auth.FromUserID) // trick: 应该是自己的，这里方便下面的参数只用 _
+				authReqTx, err := queryTx(addr, "_", auth.ReqID.String())
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
+				if authReqTx==nil {
+					fmt.Println("AuthID not found")
+					break
+				}
+				authReq, ok := (*authReqTx).Payload.(*types.Auth)	// 授权块
+				if !ok {
+					fmt.Println("need a Auth Payload")
+					break
+				}
 
-			// 解密 data 数据
-			//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-			//var decryptNonce [24]byte
-			//copy(decryptNonce[:], auth.Data[:24])
-			//fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-			//decrypted, ok := box.OpenAfterPrecomputation(nil, auth.Data[24:], &decryptNonce, &decryptKey)
-			//if ok {
-			//	data = string(decrypted)
-			//} else {
-			//	data = base64.StdEncoding.EncodeToString(auth.Data) // 加密数据的 base64
-			//	fmt.Println("decryption error")
-			//}
+				// 解密出rb, 加密密钥使用私钥前16字节（128bit）
+				myKey := (*me.CryptoPair.PrivKey)[:16]
+				rbBytesLen := int(authReq.Data[0])
+				// 加密数据, rb私钥加密
+				rbPrivBytes, err := sm4.Sm4CFB(myKey, authReq.Data[rbBytesLen+1:], false)
+				if err != nil {
+					fmt.Printf("sm4 encrypt error: %s", err)
+					break
+				}
+				rbPriv := restoreKey(&rbPrivBytes)
+
+				// 私钥
+				dbPriv := me.SignKey
+
+				// auth.Data里取得密钥协商数据: ra.pub da.pub data
+				raBytesLen := int(auth.Data[0])
+				daBytes := auth.FromUserID
+				raBytes := auth.Data[1:raBytesLen+1]
+
+				daPub := restorePublicKey(daBytes)
+				raPub := restorePublicKey(raBytes)
+
+				// 生成 解密密钥
+				decryptKey, _, _, err := sm2.KeyExchangeB(16, 
+					auth.FromUserID, auth.ToUserID, &dbPriv, daPub, rbPriv, raPub)
+				if err != nil {
+					fmt.Printf("decryptKey error: %s", err)
+					break
+				}
+
+				// 解密
+				decrypted, err := sm4.Sm4CFB(decryptKey, auth.Data[raBytesLen+1:], false)
+				if err==nil {
+					data = string(decrypted)
+				} 
+
+				break
+			}
 		}
 
 		userId, _ := cdc.MarshalJSON(auth.FromUserID)
@@ -176,20 +219,17 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 			//var decryptKey, publicKey []byte
 
 			if bytes.Compare(deal.UserID, *me.CryptoPair.PubKey)==0 { // 是自己的交易, 进行解密
-				//publicKey = deal.UserID
+				// 加密密钥使用私钥前16字节（128bit）
+				encryptKey := (*me.CryptoPair.PrivKey)[:16]
 
-				// 解密 data 数据
-				//box.Precompute(&decryptKey, &publicKey, me.CryptoPair.PrivKey)
-				//var decryptNonce [24]byte
-				//copy(decryptNonce[:], deal.Data[:24])
-				////fmt.Printf("data=>%v,decryptNonce=>%v,decryptKey=>%v\n", deal.Data[24:], decryptNonce, decryptKey)
-				//decrypted, ok := box.OpenAfterPrecomputation(nil, deal.Data[24:], &decryptNonce, &decryptKey)
-				//if ok {
-				//	data = string(decrypted)
-				//} else {
-				//	data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
-				//	fmt.Println("decryption error")
-				//}
+				decrypted, err := sm4.Sm4CFB(encryptKey, deal.Data, false)
+				if err==nil {
+					data = string(decrypted)
+				} else {
+					data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
+					fmt.Println("decryption error")
+				}
+				//fmt.Printf("plain --> %s\n", decrypted)
 			} else {
 				data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
 			}
