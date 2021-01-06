@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"time"
+	"encoding/json"
 	uuid "github.com/satori/go.uuid"
 	"github.com/tjfoc/gmsm/sm4"
 )
@@ -19,7 +20,7 @@ func isASCII(s string) bool {
 }
 
 // 交易上链，数据加密
-func (me *User) Deal(data string) error {
+func (me *User) Deal(data string) ([]byte, error) {
 
 	// 用户id
 	userId := *me.CryptoPair.PubKey
@@ -30,7 +31,7 @@ func (me *User) Deal(data string) error {
 	// 加密数据
 	encrypted, err := sm4.Sm4CFB(encryptKey, []byte(data), true)
 	if err != nil {
-		return fmt.Errorf("sm4 encrypt error: %s", err)
+		return nil, fmt.Errorf("sm4 encrypt error: %s", err)
 	}
 	//fmt.Printf("encrypted --> %x\n", encrypted)
 
@@ -51,22 +52,27 @@ func (me *User) Deal(data string) error {
 	// broadcast this tx
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	ret, err := cli.BroadcastTxSync(ctx, bz)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	fmt.Printf("deal => %+v\n", ret)
 
 	if ret.Code !=0 {
-		fmt.Println(ret.Log)
-		return fmt.Errorf(ret.Log)
+		return nil, fmt.Errorf(ret.Log)
 	}
 
-	return nil
+	respMap := map[string]string{"id" : deal.ID.String()}
+
+	// 返回结果转为json
+	respBytes, err := json.Marshal(respMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return respBytes, nil
 }

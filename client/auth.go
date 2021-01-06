@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"time"
 	"crypto/rand"
+	"encoding/json"
 	uuid "github.com/satori/go.uuid"
 	"github.com/tjfoc/gmsm/sm2"
 	"github.com/tjfoc/gmsm/sm4"
@@ -15,20 +16,20 @@ import (
 
 // 请求授权 上链
 // xcli authRequest j9cIgmm17x0aLApf0i20UR7Pj34Ua/JwyWOuBGgYIFg= dcfe656c-6c65-45e7-9e94-f082a068a93d
-func (me *User) AuthRequest(fromUserId, dealId string) error {
+func (me *User) AuthRequest(fromUserId, dealId string) ([]byte, error) {
 	now := time.Now()
 
 	// 检查 toUserId 合理性
 	var fromUserIdBytes []byte
 	err := cdc.UnmarshalJSON([]byte("\""+fromUserId+"\""), &fromUserIdBytes) // 反序列化时需要双引号，因为是字符串
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 检查 dealID -->  UUID
 	uuidDealId, err := uuid.FromString(dealId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 
@@ -43,7 +44,7 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 	// 加密数据, rb私钥加密
 	encrypted, err := sm4.Sm4CFB(encryptKey, rb.D.Bytes(), true)
 	if err != nil {
-		return fmt.Errorf("sm4 encrypt error: %s", err)
+		return nil, fmt.Errorf("sm4 encrypt error: %s", err)
 	}
 
 	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + 加密的rb.priv
@@ -69,29 +70,37 @@ func (me *User) AuthRequest(fromUserId, dealId string) error {
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	ret, err := cli.BroadcastTxSync(ctx, bz)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 	fmt.Printf("auth request => %+v\n", ret)
 
 	// ret  *ctypes.ResultBroadcastTxCommit
 	if ret.Code !=0 {
 		fmt.Println(ret.Log)
-		return fmt.Errorf(ret.Log)
+		return nil, fmt.Errorf(ret.Log)
 	}
 
-	return nil
+	respMap := map[string]string{"id" : auth.ID.String()}
+
+	// 返回结果转为json
+	respBytes, err := json.Marshal(respMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return respBytes, nil
 }
 
 
 // 响应授权 上链
 // xcli authRequest dcfe656c-6c65-45e7-9e94-f082a068a93d
-func (me *User) AuthResponse(authId string) error {
+func (me *User) AuthResponse(authId string) ([]byte, error) {
 	addr, _ := cdc.MarshalJSON(*me.CryptoPair.PubKey)
 
 	now := time.Now()
@@ -99,43 +108,43 @@ func (me *User) AuthResponse(authId string) error {
 	// 获取 authID 对应的 授权请求 块
 	authTx, err := queryTx(addr, "_", authId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if authTx==nil {
-		return fmt.Errorf("AuthID not found")
+		return nil, fmt.Errorf("AuthID not found")
 	}
 	auth, ok := (*authTx).Payload.(*types.Auth)	// 授权块
 	if !ok {
-		return fmt.Errorf("need a Auth Payload")
+		return nil, fmt.Errorf("need a Auth Payload")
 	}
 
 	// 检查fromUserId 是否是自己, 说明有问题！ 可能被黑！
 	if bytes.Compare(auth.FromUserID, *me.CryptoPair.PubKey)!=0 {
-		return fmt.Errorf("---> NOT MY AUTH <---")
+		return nil, fmt.Errorf("---> NOT MY AUTH <---")
 	}
 
 	// 检查是否已响应过，在toUserID的列表里找
 	toUserId, _ := cdc.MarshalJSON(auth.ToUserID)
 	isAuthorised, err := checkAuthResp(addr, string(toUserId), authId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if isAuthorised { // 已经授权过
-		return fmt.Errorf("Authorized")
+		return nil, fmt.Errorf("Authorized")
 	}
 
 	// 获取 authID 对应的 交易块
 	dealTx, err := queryTx(addr, "_", auth.DealID.String())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if dealTx==nil {
-		return fmt.Errorf("DealID not found")
+		return nil, fmt.Errorf("DealID not found")
 	}
 
 	deal, ok := (*dealTx).Payload.(*types.Deal)	// 交易块
 	if !ok {
-		return fmt.Errorf("need a Deal Payload")
+		return nil, fmt.Errorf("need a Deal Payload")
 	}
 
 	// 解密
@@ -145,7 +154,7 @@ func (me *User) AuthResponse(authId string) error {
 
 	decrypted, err := sm4.Sm4CFB(decryptKey, deal.Data, false)
 	if err!=nil {
-		return fmt.Errorf("sm4 decrypt error: %s", err)
+		return nil, fmt.Errorf("sm4 decrypt error: %s", err)
 	}
 	//fmt.Printf("plain --> %s\n", decrypted)
 
@@ -167,13 +176,13 @@ func (me *User) AuthResponse(authId string) error {
 	encryptKey, _, _, err := sm2.KeyExchangeA(16, 
 		auth.FromUserID, auth.ToUserID, &daPriv, dbPub, raPriv, rbPub)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 重新加密
 	encrypted, err := sm4.Sm4CFB(encryptKey, decrypted, true)
 	if err != nil {
-		return fmt.Errorf("sm4 encrypt error: %s", err)
+		return nil, fmt.Errorf("sm4 encrypt error: %s", err)
 	}
 	//fmt.Printf("%d %v\n", len(encrypted), encrypted)
 
@@ -204,13 +213,13 @@ func (me *User) AuthResponse(authId string) error {
 	bz, err := cdc.MarshalJSON(&tx)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	ret, err := cli.BroadcastTxSync(ctx, bz)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
 
 	fmt.Printf("auth respose => %+v\n", ret)
@@ -218,8 +227,16 @@ func (me *User) AuthResponse(authId string) error {
 	// ret  *ctypes.ResultBroadcastTxCommit
 	if ret.Code !=0 {
 		fmt.Println(ret.Log)
-		return fmt.Errorf(ret.Log)
+		return nil, fmt.Errorf(ret.Log)
 	}
 
-	return nil
+	respMap := map[string]string{"id" : authResp.ID.String()}
+
+	// 返回结果转为json
+	respBytes, err := json.Marshal(respMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return respBytes, nil
 }

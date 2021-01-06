@@ -2,6 +2,7 @@ package http
 
 import (
 	"log"
+	"encoding/json"
 	"github.com/valyala/fasthttp"
 )
 
@@ -28,15 +29,23 @@ func deal(ctx *fasthttp.RequestCtx) {
 	}
 
 	// 提交交易
-	err = me.Deal(data)
+	respBytes, err := me.Deal(data)
 	if err != nil {
 		respError(ctx, 9004, err.Error())
 		return
 	}
 
-	// 正常 返回空
-	resp := map[string] interface{} {
-		"data" : nil,
+	// 转换成map, 生成返回数据
+	var respData []map[string]interface{}
+
+	if err := json.Unmarshal(respBytes, &respData); err != nil {
+		respError(ctx, 9005, err.Error())
+		return
 	}
+
+	resp := map[string] interface{} {
+		"data" : respData,
+	}
+
 	respJson(ctx, &resp)
 }
