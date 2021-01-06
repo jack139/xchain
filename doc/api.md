@@ -171,7 +171,7 @@ base64后结果：
 | ---- | ------ | --------------------------------------- |
 | code | int    | 状态代码，0 表示成功，非0 表示出错      |
 | msg  | string | 成功时返回success；出错时，返回出错信息 |
-| data | json   | 无                                      |
+| data | json   | 交易区块id                              |
 
 请求示例
 
@@ -194,7 +194,7 @@ base64后结果：
 {
     "code": 0, 
     "data": {
-        "data": null
+        "id": "5cee67ef-b86c-4056-816b-f19334afa41f"
     }, 
     "msg": "success"
 }
@@ -225,7 +225,7 @@ base64后结果：
 | ---- | ------ | --------------------------------------- |
 | code | int    | 状态代码，0 表示成功，非0 表示出错      |
 | msg  | string | 成功时返回success；出错时，返回出错信息 |
-| data | json   | 无                                      |
+| data | json   | 授权区块id                              |
 
 请求示例
 
@@ -249,7 +249,7 @@ base64后结果：
 {
     "code": 0, 
     "data": {
-        "data": null
+        "id": "5cee67ef-b86c-4056-816b-f19334afa41f"
     }, 
     "msg": "success"
 }
@@ -279,7 +279,7 @@ base64后结果：
 | ---- | ------ | --------------------------------------- |
 | code | int    | 状态代码，0 表示成功，非0 表示出错      |
 | msg  | string | 成功时返回success；出错时，返回出错信息 |
-| data | json   | 无                                      |
+| data | json   | 授权区块id                              |
 
 请求示例
 
@@ -302,7 +302,7 @@ base64后结果：
 {
     "code": 0, 
     "data": {
-        "data": null
+        "id": "5cee67ef-b86c-4056-816b-f19334afa41f"
     }, 
     "msg": "success"
 }

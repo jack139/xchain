@@ -36,7 +36,7 @@ if __name__ == '__main__':
         }
     }
 
-    secret = 'UgM13IPx/BkwfQo8jceLq1CiXlT3lm4WLZ6K6TMR5bRueBGgTDVAv7ZLdBooTZWm2ixLaNitCW91NHW06h8VQw=='
+    secret = 'UDD5X7pNUMgQs1XXxiqj91yteZkmcrQuiIux5RTUu90='
     appid = hashlib.md5(secret.encode('utf-8')).hexdigest()
     unixtime = int(time.time())
     body['timestamp'] = unixtime
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     pool = urllib3.PoolManager(num_pools=2, timeout=180, retries=False)
 
     host = 'http://%s:%s'%(hostname, port)
-    url = host+'/api/query_block'
+    url = host+'/api/query_deals'
 
     start_time = datetime.now()
     r = pool.urlopen('POST', url, body=body)

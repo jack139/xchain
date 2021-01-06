@@ -41,7 +41,7 @@ func authRequest(ctx *fasthttp.RequestCtx) {
 	}
 
 	// 转换成map, 生成返回数据
-	var respData []map[string]interface{}
+	var respData map[string]interface{}
 
 	if err := json.Unmarshal(respBytes, &respData); err != nil {
 		respError(ctx, 9005, err.Error())
@@ -85,7 +85,7 @@ func authResponse(ctx *fasthttp.RequestCtx) {
 	}
 
 	// 转换成map, 生成返回数据
-	var respData []map[string]interface{}
+	var respData map[string]interface{}
 
 	if err := json.Unmarshal(respBytes, &respData); err != nil {
 		respError(ctx, 9005, err.Error())

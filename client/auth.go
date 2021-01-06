@@ -86,7 +86,7 @@ func (me *User) AuthRequest(fromUserId, dealId string) ([]byte, error) {
 		return nil, fmt.Errorf(ret.Log)
 	}
 
-	respMap := map[string]string{"id" : auth.ID.String()}
+	respMap := map[string]interface{}{"id" : auth.ID.String()}
 
 	// 返回结果转为json
 	respBytes, err := json.Marshal(respMap)
@@ -230,7 +230,7 @@ func (me *User) AuthResponse(authId string) ([]byte, error) {
 		return nil, fmt.Errorf(ret.Log)
 	}
 
-	respMap := map[string]string{"id" : authResp.ID.String()}
+	respMap := map[string]interface{}{"id" : authResp.ID.String()}
 
 	// 返回结果转为json
 	respBytes, err := json.Marshal(respMap)

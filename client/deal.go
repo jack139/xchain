@@ -66,7 +66,7 @@ func (me *User) Deal(data string) ([]byte, error) {
 		return nil, fmt.Errorf(ret.Log)
 	}
 
-	respMap := map[string]string{"id" : deal.ID.String()}
+	respMap := map[string]interface{}{"id" : deal.ID.String()}
 
 	// 返回结果转为json
 	respBytes, err := json.Marshal(respMap)
