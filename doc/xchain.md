@@ -1,4 +1,4 @@
-## 基于国密算法在区块链上进行数据授权交换
+## 基于国密算法在区块链上进行授权数据交换
 
 
 
@@ -17,6 +17,8 @@
 
 ### 3. 数据结构设计
 
+区块交易结构基类
+
 ```go
 // Transx 事务基类
 type Transx struct {
@@ -27,6 +29,8 @@ type Transx struct {
 }
 ```
 
+交易数据payload
+
 ```go
 // 交易信息
 type Deal struct {
@@ -35,6 +39,8 @@ type Deal struct {
 	Data   []byte // 加密交易数据（例如 ipfs hash）
 }
 ```
+
+授权请求/授权操作payload
 
 ```go
 // 授权操作
@@ -53,9 +59,10 @@ type Auth struct {
 ```
 
 
+
 ### 4. 使用示例
 
-#### 4.1 本地多节点测试
+#### 4.1 本地节点测试
 
 编译
 
@@ -81,53 +88,167 @@ $ build/xchain node --home n1 --consensus.create_empty_blocks=false
 ```shell
 $ build/xcli init --home users/user1
 $ build/xcli init --home users/user2
+$ cat users/user1/user.key 
+{"PrivKey":"UDD5X7pNUMgQs1XXxiqj91yteZkmcrQuiIux5RTUu90=","PubKey":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG"}
+$ cat users/user2/user.key 
+{"PrivKey":"8afZQKZXej31zU5CDpQZVFoi6+x///59ZuKh9wyJ2Ag=","PubKey":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih"}
 ```
 
-查询验证节点信息
 
-```shell
-$ curl http://localhost:26657/validators
-```
-
-查询网络信息
-
-```shell
-$ curl http://localhost:26657/net_info
-```
 
 #### 4.2 数据上链
-数据上链
+
+##### user1 数据上链
+
+> 返回值为区块id 
+
 ```shell
 $ build/xcli deal --home users/user1 "hello world"
+Deal ==> {"id":"ddd8c8c2-d625-46ad-ab6c-6c49aad45836"}
 ```
 
-查询链上数据
+
+
+##### user1 查询链上数据
+
+> 查询上述新添加的数据区块，因为user1是提交者，所以可以解密data数据，看到明文。
+
 ```shell
-$ build/xcli queryDeal --home users/user1
+$ build/xcli queryTx --home users/user1 _ ddd8c8c2-d625-46ad-ab6c-6c49aad45836
+Tx ==> {"data":"hello world","id":"ddd8c8c2-d625-46ad-ab6c-6c49aad45836","send_time":"2021-01-07T06:17:08.356336674Z","type":"DEAL","user_id":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG"}
 ```
+
+> 下面是区块上的原始数据，Data字段是SM4加密存储的，使用user1的私钥进行加密。
+
+```json
+{
+    "Signature":"MEUCIQCyDuZfg6aUGbFdaonXC81GLynPwoXQkGUbaX6rhdW02AIgcGlDVAhH0hh86CcXo3zrntC+n2NDMFNHuXIFAkG2TN0=",
+    "SendTime":"2021-01-07T06:17:08.356336674Z",
+    "SignPubKey":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
+    "Payload":{
+        "type":"deal",
+        "value":{
+            "ID":"3djIwtYlRq2rbGxJqtRYNg==",
+            "UserID":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
+            "Data":"NMiY8YnJVX7UUhLHTTgzsg=="
+        }
+    }
+}
+```
+
+
+
+##### user2 查询链上数据
+
+> 因为此区块不是user2的，所以当user2查询时，只能看到加密数据，不能解密。
+
+```shell
+$ build/xcli queryTx --home users/user2 "A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG" ddd8c8c2-d625-46ad-ab6c-6c49aad45836
+Tx ==> {"data":"NMiY8YnJVX7UUhLHTTgzsg==","id":"ddd8c8c2-d625-46ad-ab6c-6c49aad45836","send_time":"2021-01-07T06:17:08.356336674Z","type":"DEAL","user_id":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG"}
+```
+
+
 
 #### 4.3 授权数据交换
-> user1 拥有数据，user2向user1发起请求，获取user1的数据
-> user1 公钥： qyBsXnVKKjvFNxHBRudc3tCp8t8ymqBSF1Ga8qlfqFs=
 
-user2 提出数据授权请求
+##### user2 提出数据授权请求
+
+> user2向user1发起请求，获取user1的数据。第一个参数是数据所有这的用户id，第二个参数是区块id。
+> user1 公钥： ```A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG```
+>
+> 返回值为授权请求的区块id，授权请求也会上链，用于追溯。
+
 ```shell
-$ build/xcli authReq --home users/user2 qyBsXnVKKjvFNxHBRudc3tCp8t8ymqBSF1Ga8qlfqFs= eea272cb-74ad-4289-aac4-07f84d3284dc
+$ build/xcli authReq --home users/user2 "A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG" ddd8c8c2-d625-46ad-ab6c-6c49aad45836
+AuthReq ==> {"id":"a0dfc291-b70e-45d5-a360-67c3099ee775"}
 ```
 
-user1 查询授权请求
+
+
+##### user1 查询授权请求
+
+> user1 可以查询谁提交的授权请求（action==4）
+>
+> from_user_id 是接收授权请求的用户，即数据的所有者，这里是 user1
+>
+> to_user_id 是发起授权请求的用户，这里是 user2  
+>
+> deal_id 是 to_user_id 请求授权的 区块id
+>
+> user2的公钥：```A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih```
+
 ```shell
 $ build/xcli queryAuth --home users/user1
+Auth ==> [{"action":4,"data":"","deal_id":"ddd8c8c2-d625-46ad-ab6c-6c49aad45836","from_user_id":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG","id":"a0dfc291-b70e-45d5-a360-67c3099ee775","send_time":"2021-01-07T06:19:52.274531072Z","to_user_id":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih","type":"AUTH"}]
 ```
 
-user1 对授权请求进行授权
-```shell
-$ build/xcli authResp --home users/user1 6b292c1d-2963-4308-86cb-99fc41c9cd45
+> 下面是授权请求在区块上的原始数据（action==4），Data字段是用SM4加密存储的，使用user1和user2协商的密钥进行加密。此时Data字段存储用于密钥协商的密钥数据。
+
+```json
+{
+    "Signature":"MEUCIQDx2eV34dEkXgjuMDja8UB14qJ2DkVsnFWrjePEF7kaNQIgWqrtGlrj03NY4cONYHSHCjNPOC7VF6IXTHbnFWdasdE=",
+    "SendTime":"2021-01-07T06:19:52.274531072Z",
+    "SignPubKey":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih",
+    "Payload":{
+        "type":"auth",
+        "value":{
+            "ID":"oN/CkbcORdWjYGfDCZ7ndQ==",
+            "ReqID":"AAAAAAAAAAAAAAAAAAAAAA==",
+            "DealID":"3djIwtYlRq2rbGxJqtRYNg==",
+            "FromUserID":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
+            "ToUserID":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih",
+            "Data":"IQNMyfoDgrAH6XpPFMB+xhXsPx5cj3eir/JbWv9nbez9rcmvBjByL1Q1Y0CeV2kxFDpkN3lIg3v2/zWlKAnA2rT6h3LzD1NgEse1KFgK4h2qrA==",
+            "Action":4
+        }
+    }
+}
 ```
 
-user2 查询授权结果
+
+
+##### user1 对授权请求进行授权
+
+> 参数为授权请求的区块id
+>
+> 返回值为响应授权请求的区块id，授权操作也会上链，用于追溯。
+
 ```shell
-build/xcli queryAuth --home users/user2
+$ build/xcli authResp --home users/user1 a0dfc291-b70e-45d5-a360-67c3099ee775
+AuthResp ==> {"id":"bea9a9d5-9cde-4dec-9ac9-8a23c2ca4903"}
+```
+
+
+
+##### user2 查询授权结果
+
+> 当user1授权后，user2就可以查询到授权的记录，并可以加密data字段，获得明文。
+
+```shell
+$ build/xcli queryAuth --home users/user2
+Auth ==> [{"action":5,"data":"hello world","deal_id":"ddd8c8c2-d625-46ad-ab6c-6c49aad45836","from_user_id":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG","id":"bea9a9d5-9cde-4dec-9ac9-8a23c2ca4903","req_id":"a0dfc291-b70e-45d5-a360-67c3099ee775","send_time":"2021-01-07T06:21:20.728255461Z","to_user_id":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih","type":"AUTH"}]
+```
+
+> 下面是授权操作在区块上的原始数据（action==5），Data字段是用SM4加密存储的，使用user1和user2协商的密钥进行加密。
+
+```json
+{
+    "Signature":"MEQCIFQmtsprc9PvgzmHBSNRREF8emMBav5/N1s3o67KPQ10AiAt+q5tN8oH50S2uAGL0rQKXfzYdbRCYfObzAnUSIbguQ==",
+    "SendTime":"2021-01-07T06:21:20.728255461Z",
+    "SignPubKey":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
+    "Payload":{
+        "type":"auth",
+        "value":{
+            "ID":"vqmp1ZzeTeyayYojwspJAw==",
+            "ReqID":"oN/CkbcORdWjYGfDCZ7ndQ==",
+            "DealID":"3djIwtYlRq2rbGxJqtRYNg==",
+            "FromUserID":"A2FCWvU0EUuqhZKL1KRRaIcxKNx/8HUw1Uz8ZfH/qEMG",
+            "ToUserID":"A/45NkcCX4WIw+En0eQPgbp2oSaYbCAOiYqTfQTbZgih",
+            "Data":
+            "IQKrWsz5EOZAMLJUe1Dq6lzwPrp8ECoAU19IODmAhz3xVL+mWmJdkS6r5bsfmDj+BYc=",
+            "Action":5
+        }
+    }
+}
 ```
 
 
