@@ -189,7 +189,7 @@ func (me *User) AuthResponse(authId string) ([]byte, error) {
 
 	raPubBytes := sm2.Compress(&raPriv.PublicKey) // 33 bytes
 
-	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + 加密的rb.priv
+	// data格式： ra.pub长度(byte) + ra.pub(33bytes?) + K加密的数据
 	cryptData := append([]byte{byte(len(raPubBytes))}, raPubBytes...)
 	cryptData = append(cryptData, encrypted...)
 
