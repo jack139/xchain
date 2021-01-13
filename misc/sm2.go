@@ -206,5 +206,27 @@ func main() {
 	}
 
 	fmt.Println("pass")
+
+	// sm2 加解密测试
+
+	rx, _ := sm2.GenerateKey(rand.Reader)
+	msg := []byte("hello world")
+
+	d0, err := sm2.EncryptAsn1(&rx.PublicKey, msg, rand.Reader)
+	if err != nil {
+		fmt.Printf("Error: failed to encrypt %s: %v\n", msg, err)
+		return
+	}
+
+	d1, err := sm2.DecryptAsn1(rx, d0)
+	if err != nil {
+		fmt.Printf("Error: failed to decrypt: %v\n", err)
+	}
+	fmt.Printf("clear text = %s\n", d1)
+
+	// 产生16个随机数， 可做sm4密钥
+	b := make([]byte, 16)
+	_, err = rand.Reader.Read(b)
+	fmt.Printf("rand = %v\n", b)
 }
 

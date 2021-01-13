@@ -157,12 +157,11 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 				}
 
 				// 解密出rb, 加密密钥使用私钥前16字节（128bit）
-				myKey := (*me.CryptoPair.PrivKey)[:16]
 				rbBytesLen := int(authReq.Data[0])
-				// 加密数据, rb私钥加密
-				rbPrivBytes, err := sm4.Sm4CFB(myKey, authReq.Data[rbBytesLen+1:], false)
+				// 加密数据, rb私钥sm2加密
+				rbPrivBytes, err := sm2.DecryptAsn1(&me.SignKey, authReq.Data[rbBytesLen+1:])
 				if err != nil {
-					fmt.Printf("sm4 encrypt error: %s", err)
+					fmt.Printf("sm2 decrypt fail: %s\n", err)
 					break
 				}
 				rbPriv := restoreKey(&rbPrivBytes)
@@ -219,20 +218,23 @@ func txToResp(me *User, tx *types.Transx) *map[string]interface{} {
 			var data string
 			
 			// 尝试解密 data
-			//var decryptKey, publicKey []byte
-
 			if bytes.Compare(deal.UserID, *me.CryptoPair.PubKey)==0 { // 是自己的交易, 进行解密
-				// 加密密钥使用私钥前16字节（128bit）
-				encryptKey := (*me.CryptoPair.PrivKey)[:16]
+				// 从data中解密出sm4密钥
+				// data格式： sm4密钥长度(byte)(sm2加密) + sm4加密的data
+				sm4keyLen := int(deal.Data[0])
 
-				decrypted, err := sm4.Sm4CFB(encryptKey, deal.Data, false)
-				if err==nil {
-					data = string(decrypted)
+				decryptKey, err := sm2.DecryptAsn1(&me.SignKey, deal.Data[1:sm4keyLen+1])
+				if err == nil {
+					decrypted, err := sm4.Sm4CFB(decryptKey, deal.Data[sm4keyLen+1:], false)
+					if err==nil {
+						data = string(decrypted)
+					} else {
+						data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
+						fmt.Printf("sm4 decryption error: %s\n", err)
+					}
 				} else {
-					data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
-					fmt.Println("decryption error")
+					fmt.Printf("sm2 decrypt fail: %s\n", err)
 				}
-				//fmt.Printf("plain --> %s\n", decrypted)
 			} else {
 				data = base64.StdEncoding.EncodeToString(deal.Data) // 加密数据的 base64
 			}

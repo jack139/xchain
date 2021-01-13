@@ -39,15 +39,13 @@ func (me *User) AuthRequest(fromUserId, dealId string) ([]byte, error) {
 	rb, _ := sm2.GenerateKey(rand.Reader) // 生成密钥对
 	rbPubBytes := sm2.Compress(&rb.PublicKey) // 33 bytes
 
-	// 加密密钥使用私钥前16字节（128bit）
-	encryptKey := (*me.CryptoPair.PrivKey)[:16]
-	// 加密数据, rb私钥加密
-	encrypted, err := sm4.Sm4CFB(encryptKey, rb.D.Bytes(), true)
+	// 用sm2加密rb私钥
+	encrypted, err := sm2.EncryptAsn1(&me.SignKey.PublicKey, rb.D.Bytes(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("sm4 encrypt error: %s", err)
+		return nil, fmt.Errorf("sm2 encrypt fail: %s", err)
 	}
 
-	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + 加密的rb.priv
+	// data格式： rb.pub长度(byte) + rb.pub(33bytes?) + sm2加密的rb.priv
 	cryptData := append([]byte{byte(len(rbPubBytes))}, rbPubBytes...)
 	cryptData = append(cryptData, encrypted...)
 
@@ -149,10 +147,19 @@ func (me *User) AuthResponse(authId string) ([]byte, error) {
 
 	// 解密
 
-	// 加密密钥使用私钥前16字节（128bit）
-	decryptKey := (*me.CryptoPair.PrivKey)[:16]
+	// 从data中解密出sm4密钥
+	// data格式： sm4密钥长度(byte)(sm2加密) + sm4加密的data
+	sm4keyLen := int(deal.Data[0])
 
-	decrypted, err := sm4.Sm4CFB(decryptKey, deal.Data, false)
+	decryptKey, err := sm2.DecryptAsn1(&me.SignKey, deal.Data[1:sm4keyLen+1])
+	if err != nil {
+		return nil, fmt.Errorf("sm2 decrypt fail: %s", err)
+	}
+
+	// 加密密钥使用私钥前16字节（128bit）
+	//decryptKey := (*me.CryptoPair.PrivKey)[:16]
+
+	decrypted, err := sm4.Sm4CFB(decryptKey, deal.Data[sm4keyLen+1:], false)
 	if err!=nil {
 		return nil, fmt.Errorf("sm4 decrypt error: %s", err)
 	}
