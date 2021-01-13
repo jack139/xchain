@@ -148,7 +148,7 @@ func (me *User) AuthResponse(authId string) ([]byte, error) {
 	// 解密
 
 	// 从data中解密出sm4密钥
-	// data格式： sm4密钥长度(byte)(sm2加密) + sm4加密的data
+	// data格式： sm4密钥长度(byte)(sm2加密) + sm2加密的sm4密钥 + sm4加密的data
 	sm4keyLen := int(deal.Data[0])
 
 	decryptKey, err := sm2.DecryptAsn1(&me.SignKey, deal.Data[1:sm4keyLen+1])

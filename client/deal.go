@@ -47,7 +47,7 @@ func (me *User) Deal(data string) ([]byte, error) {
 		return nil, fmt.Errorf("sm2 encrypt fail: %s", err)
 	}
 
-	// data格式： sm4密钥长度(byte)(sm2加密) + sm4加密的data
+	// data格式： sm4密钥长度(byte)(sm2加密) + sm2加密的sm4密钥 + sm4加密的data
 	cryptData := append([]byte{byte(len(d0))}, d0...)
 	cryptData = append(cryptData, encrypted...)
 

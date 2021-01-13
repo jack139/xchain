@@ -83,8 +83,7 @@ type Auth struct {
 	DealID      uuid.UUID // 相关交易ID
 	FromUserID  []byte // 数据所有者的用户ID（用户公钥）
 	ToUserID    []byte // 被授权的用户ID（用户公钥）
-	Data        []byte //  action==4, rb.pub (33 bytes) + rb.priv (B的私钥加密的)
-			           //  action==5, ra.pub (33 butes) + data (协商的密钥加密)
+	Data        []byte 
 	Action      byte // 0x04 请求授权， 0x05 响应授权
 }
 ```

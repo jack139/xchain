@@ -9,7 +9,7 @@ import (
 type Deal struct {
 	ID     uuid.UUID // 交易ID
 	UserID []byte //用户的加密公钥
-	Data   []byte // 加密交易数据（例如 ipfs hash）
+	Data   []byte // 格式： sm4密钥长度(byte)(sm2加密) + sm2加密的sm4密钥 + sm4加密的data
 }
 
 // GetKey 获取实体键
